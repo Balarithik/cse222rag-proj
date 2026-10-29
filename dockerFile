@@ -53,4 +53,4 @@ USER app
 EXPOSE 8000
 
 # Apply migrations and start Django with Gunicorn
-CMD ["sh", "-c", "if [ -z \"$DJANGO_SECRET_KEY\" ] || [ \"$DJANGO_SECRET_KEY\" = \"replace_with_a_long_random_secret\" ]; then echo 'ERROR: Set DJANGO_SECRET_KEY before starting.' >&2; exit 1; fi; python manage.py migrate --noinput && exec gunicorn ragproject.wsgi:application --bind 0.0.0.0:{PORT:-8000} --workers ${GUNICORN_WORKERS:-1} --timeout ${GUNICORN_TIMEOUT:-120} --access-logfile - --error-logfile -"]
+CMD ["sh", "-c", "if [ -z \"$DJANGO_SECRET_KEY\" ] || [ \"$DJANGO_SECRET_KEY\" = \"replace_with_a_long_random_secret\" ]; then echo 'ERROR: Set DJANGO_SECRET_KEY before starting.' >&2; exit 1; fi; python manage.py migrate --noinput && exec gunicorn ragproject.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers ${GUNICORN_WORKERS:-1} --timeout ${GUNICORN_TIMEOUT:-120} --access-logfile - --error-logfile -"]
