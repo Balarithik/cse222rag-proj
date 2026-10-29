@@ -1,0 +1,44 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101827">
+  <title>{% block title %}DocuMind · RAG Workspace{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'documents/app.css' %}">
+  <script defer src="{% static 'documents/app.js' %}"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <a href="{% url 'home' %}" class="brand" aria-label="DocuMind home">
+        <span class="brand-mark">D<span>·</span></span>
+        <span class="brand-copy"><strong>DocuMind</strong><small>RETRIEVAL WORKSPACE</small></span>
+      </a>
+      <div class="topbar-right">
+        <span class="system-pill"><span class="status-dot"></span> RAG pipeline</span>
+        <span class="stack-label">Django <i>×</i> LangChain <i>×</i> FAISS</span>
+      </div>
+    </header>
+
+    {% if messages %}
+      <div class="toast-stack" aria-live="polite">
+        {% for message in messages %}
+          <div class="toast toast-{{ message.tags }}">
+            <span>{{ message }}</span>
+            <button type="button" class="toast-close" aria-label="Dismiss message">×</button>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    {% block content %}{% endblock %}
+
+    <footer class="app-footer">
+      <span>Built for document-grounded answers.</span>
+      <span>Private browser-session workspace <b>·</b> Sources shown with each answer</span>
+    </footer>
+  </div>
+</body>
+</html>

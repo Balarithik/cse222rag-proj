@@ -1,0 +1,55 @@
+FROM python:3.12-slim-bookworm
+
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:0.13.6 /uv /uvx /bin/
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    UV_LINK_MODE=copy \
+    UV_NO_DEV=1 \
+    PATH="/app/.venv/bin:$PATH" \
+    DJANGO_DEBUG=False \
+    DJANGO_SQLITE_PATH=/data/db.sqlite3 \
+    DJANGO_SECRET_KEY=dfsdadcvfvrfsdf432324 \
+    GEMINI_CHAT_MODEL=gemini-3.8-flash \
+    GEMINI_EMBEDDING_MODEL=gemini-embedding-001 \
+    DJANGO_ALLOWED_HOSTS=127.0.0.1,localhost\
+    UV_HTTP_TIMEOUT=300\
+    GOOGLE_API_KEY=replace_me
+
+
+WORKDIR /app
+
+# Runtime dependency required by FAISS
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+COPY pyproject.toml README.md ./
+
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --no-dev --no-install-project
+
+# Copy your existing Django application
+COPY . /app
+
+# Install project dependencies and collect static files
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --no-dev \
+    && DJANGO_SECRET_KEY=build-only-placeholder \
+    DJANGO_DEBUG=False \
+    python manage.py collectstatic --noinput
+
+# Prepare persistent data directories and a non-root user
+RUN addgroup --system app \
+    && adduser --system --ingroup app --home /app app \
+    && mkdir -p /data /app/media /app/private_rag_data /app/staticfiles \
+    && chown -R app:app /app /data
+
+USER app
+
+EXPOSE 8000
+
+# Apply migrations and start Django with Gunicorn
+CMD ["sh", "-c", "if [ -z \"$DJANGO_SECRET_KEY\" ] || [ \"$DJANGO_SECRET_KEY\" = \"replace_with_a_long_random_secret\" ]; then echo 'ERROR: Set DJANGO_SECRET_KEY before starting.' >&2; exit 1; fi; python manage.py migrate --noinput && exec gunicorn ragproject.wsgi:application --bind 0.0.0.0:8000 --workers ${GUNICORN_WORKERS:-1} --timeout ${GUNICORN_TIMEOUT:-120} --access-logfile - --error-logfile -"]

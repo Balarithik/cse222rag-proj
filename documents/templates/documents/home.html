@@ -1,0 +1,148 @@
+{% extends 'documents/base.html' %}
+{% block title %}DocuMind · Ask your documents{% endblock %}
+{% block content %}
+<main class="workspace-layout">
+  <aside class="sidebar">
+    <div class="sidebar-heading">
+      <div>
+        <p class="eyebrow">YOUR KNOWLEDGE BASE</p>
+        <h2>Documents <span class="count-badge">{{ documents|length }}</span></h2>
+      </div>
+      <span class="folder-icon">▤</span>
+    </div>
+
+    <form class="upload-card" action="{% url 'upload_documents' %}" method="post" enctype="multipart/form-data" id="upload-form">
+      {% csrf_token %}
+      <label for="pdf-input" class="dropzone" id="dropzone">
+        <span class="upload-symbol">↑</span>
+        <strong>Upload PDF files</strong>
+        <span class="dropzone-sub">Drag files here or <u>browse</u></span>
+        <span class="file-rules">PDF · up to {{ max_pdf_size_mb }} MB each</span>
+      </label>
+      <input id="pdf-input" class="visually-hidden" name="pdfs" type="file" accept="application/pdf,.pdf" multiple required>
+      <div class="selected-files" id="selected-files" hidden></div>
+      <button class="button button-primary upload-submit" type="submit" id="upload-button">Build knowledge base <span>↗</span></button>
+      <p class="subtle-note">Up to {{ max_pdfs_per_upload }} PDFs per upload · {{ max_pdfs_per_workspace }} per workspace</p>
+    </form>
+
+    <div class="document-list-header">
+      <span>INDEXED FILES</span>
+      <span>{{ documents|length }} / {{ max_pdfs_per_workspace }}</span>
+    </div>
+
+    <div class="document-list">
+      {% for document in documents %}
+        <article class="document-row">
+          <div class="pdf-icon">PDF</div>
+          <div class="document-meta">
+            <strong title="{{ document.original_name }}">{{ document.original_name }}</strong>
+            <span>{{ document.pages_count }} pages <b>·</b> {{ document.chunks_count }} chunks</span>
+          </div>
+          <form action="{% url 'delete_document' document.pk %}" method="post" class="delete-form" data-confirm="Remove this PDF and rebuild the knowledge base?">
+            {% csrf_token %}
+            <button class="icon-button delete-button" type="submit" title="Remove {{ document.original_name }}" aria-label="Remove {{ document.original_name }}">×</button>
+          </form>
+        </article>
+      {% empty %}
+        <div class="empty-documents">
+          <span>▱</span>
+          <p>No documents yet</p>
+          <small>Upload PDFs to create your searchable knowledge base.</small>
+        </div>
+      {% endfor %}
+    </div>
+
+    <div class="index-status {% if index_ready %}is-ready{% endif %}">
+      <span class="status-icon">{% if index_ready %}✓{% else %}○{% endif %}</span>
+      <div><strong>{% if index_ready %}Index ready{% else %}Waiting for documents{% endif %}</strong><small>{% if index_ready %}FAISS vector search is available{% else %}Upload a PDF to start indexing{% endif %}</small></div>
+    </div>
+
+    <div class="pipeline-mini">
+      <p class="eyebrow">UNDER THE HOOD</p>
+      <div class="pipeline-step"><span>01</span><div><strong>Extract & chunk</strong><small>PyPDFLoader · Text Splitter</small></div></div>
+      <div class="pipeline-line"></div>
+      <div class="pipeline-step"><span>02</span><div><strong>Embed & index</strong><small>Gemini Embeddings · FAISS</small></div></div>
+      <div class="pipeline-line"></div>
+      <div class="pipeline-step"><span>03</span><div><strong>Retrieve & generate</strong><small>Similarity Search · Gemini</small></div></div>
+    </div>
+  </aside>
+
+  <section class="chat-panel">
+    <div class="chat-topline">
+      <div class="assistant-identity">
+        <div class="assistant-avatar"><span>✳</span></div>
+        <div><strong>Document Assistant</strong><span><i class="status-dot"></i> Grounded in your sources</span></div>
+      </div>
+      <div class="chat-actions">
+        <span class="model-chip">{{ documents|length }} source{{ documents|length|pluralize }}</span>
+        {% if chat_messages %}
+          <form action="{% url 'clear_chat' %}" method="post" data-confirm="Clear this chat history? Your indexed PDFs will remain.">
+            {% csrf_token %}
+            <button class="button button-ghost button-small" type="submit">Clear chat ↺</button>
+          </form>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="chat-scroll" id="chat-scroll">
+      {% if not chat_messages %}
+        <div class="welcome-state">
+          <div class="welcome-orbit orbit-one"></div><div class="welcome-orbit orbit-two"></div>
+          <div class="welcome-glyph">✳</div>
+          <p class="eyebrow">YOUR DOCUMENTS, UNDERSTOOD</p>
+          <h1>Answers are<br><em>in your files.</em></h1>
+          <p class="welcome-description">Upload your PDFs, ask a question in plain English, and get an answer grounded in the passages FAISS retrieves.</p>
+          <div class="suggestion-label">TRY A QUESTION</div>
+          <div class="suggestion-grid">
+            <button type="button" class="suggestion-chip" data-question="Summarize the main ideas in these documents."><span>✦</span> Summarize the key ideas <b>↗</b></button>
+            <button type="button" class="suggestion-chip" data-question="What are the most important concepts I should remember?"><span>⌘</span> Find key concepts <b>↗</b></button>
+            <button type="button" class="suggestion-chip" data-question="Create five practice questions from the uploaded documents."><span>✎</span> Generate practice questions <b>↗</b></button>
+            <button type="button" class="suggestion-chip" data-question="Compare the main topics discussed in these documents."><span>⇄</span> Compare topics <b>↗</b></button>
+          </div>
+        </div>
+      {% else %}
+        <div class="conversation-label"><span>CONVERSATION</span><span>Answers cite retrieved passages</span></div>
+        {% for message in chat_messages %}
+          {% if message.role == 'user' %}
+            <div class="message-row user-row">
+              <div class="message-avatar user-avatar">YOU</div>
+              <div class="message-content"><div class="message-label">YOU <span>{{ message.created_at|date:'H:i' }}</span></div><div class="message-bubble user-bubble">{{ message.content|linebreaksbr }}</div></div>
+            </div>
+          {% else %}
+            <div class="message-row assistant-row">
+              <div class="message-avatar ai-avatar">✳</div>
+              <div class="message-content"><div class="message-label">DOCUMENT ASSISTANT <span>{{ message.created_at|date:'H:i' }}</span></div><div class="answer-content">{{ message.content|linebreaksbr }}</div>
+                {% if message.sources %}
+                  <details class="sources-panel">
+                    <summary><span class="source-summary-icon">▤</span> {{ message.sources|length }} retrieved source{{ message.sources|length|pluralize }} <span class="summary-chevron">⌄</span></summary>
+                    <div class="sources-list">
+                      {% for source in message.sources %}
+                        <article class="source-card"><div class="source-card-top"><span class="source-file-icon">PDF</span><strong>{{ source.name }}</strong><span class="page-tag">Page {{ source.page }}</span></div><p>{{ source.snippet|truncatechars:340 }}</p></article>
+                      {% endfor %}
+                    </div>
+                  </details>
+                {% endif %}
+              </div>
+            </div>
+          {% endif %}
+        {% endfor %}
+      {% endif %}
+    </div>
+
+    <div class="composer-wrap">
+      {% if not has_documents %}
+        <div class="composer-hint"><span>↖</span> Upload a PDF in the left panel to unlock document chat.</div>
+      {% elif not index_ready %}
+        <div class="composer-hint"><span>◌</span> Your documents are uploaded, but the index is not ready yet.</div>
+      {% endif %}
+      <form class="composer" action="{% url 'ask_question' %}" method="post" id="question-form">
+        {% csrf_token %}
+        <label for="question-input" class="visually-hidden">Your question</label>
+        <input id="question-input" name="question" type="text" maxlength="1000" placeholder="Ask anything about your documents…" autocomplete="off" {% if not index_ready %}disabled{% endif %} required>
+        <div class="composer-bottom"><span class="composer-tip"><span>↵</span> Enter to send <i>·</i> Responses use retrieved context</span><button type="submit" class="send-button" aria-label="Send question" {% if not index_ready %}disabled{% endif %}>↑</button></div>
+      </form>
+      <p class="disclaimer">AI can make mistakes. Check the source passages before relying on an answer.</p>
+    </div>
+  </section>
+</main>
+{% endblock %}
